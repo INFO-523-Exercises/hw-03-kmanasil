@@ -24,6 +24,7 @@ Repository for HW 03 from the course: INFO 523 - Data Mining and Discovery taugh
 #### Suggested datasets:
 - [**Bird FeederWatch data**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-01-10)
 - [**Art history data**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-01-17)
+- Can we predict which season of 'The Joy of Painting' a particular painting was featured in based on the unique colors used in the painting and the total number of unique colors?
 - [**Bob Ross Paintings**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-02-21)
 - [**Energy Production**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-06-06)
 - [**Neolithic founder crops**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-04-18)
