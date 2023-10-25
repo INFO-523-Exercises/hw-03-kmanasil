@@ -15,7 +15,7 @@ Repository for HW 03 from the course: INFO 523 - Data Mining and Discovery taugh
    - A Google Collab project
    
 ### 2. View the R/Python Exercise 3 content:
-   If Using R: found [here]([https://gchism94.github.io/EDA_In_R_Book/](https://datamineaz.org/slides/week6/rexercise3)) and [here](https://datamineaz.org/slides/week6/rexercise3_1) 
+   If Using R: found [here](https://datamineaz.org/slides/week6/rexercise3) and [here](https://datamineaz.org/slides/week6/rexercise3_1) 
    If Using Python: found [here](https://datamineaz.org/python/classificationpython) 
    
 ### 3. Reproduce the exercise in a new Quarto Document or Jupyter Notebook with a novel dataset from the [tidytuesday repository 2023 datasets](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023)
@@ -23,7 +23,9 @@ Repository for HW 03 from the course: INFO 523 - Data Mining and Discovery taugh
 
 #### Suggested datasets:
 - [**Bird FeederWatch data**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-01-10)
+- Can we predict whether a particular artist is included in Janson's History of Art or Gardner's Art Through the Ages based on the artist's nationality, gender, race, ethnicity, and their exhibition counts at prominent museums (MoMA and The Whitney) by a specific publication year?
 - [**Art history data**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-01-17)
+- 
 - [**Bob Ross Paintings**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-02-21)
 - [**Energy Production**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-06-06)
 - [**Neolithic founder crops**](https://github.com/rfordatascience/tidytuesday/tree/master/data/2023/2023-04-18)
