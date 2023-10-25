@@ -1,0 +1,663 @@
+---
+title: "hw-03"
+subtitle: "Classification: Alternative Techniques"
+author: "Kristi Manasil"
+gitid: "kmanasil"
+format: html
+editor: visual
+echo: false
+---
+
+## **Install packages**
+
+Install the packages used in this chapter:
+
+```{r}
+if(!require(pacman))
+  install.packages("pacman")
+if(!require(tidyverse))
+  install.packages("tidyverse")
+
+pacman::p_load(
+  C50,                # C5.0 Decision Trees and Rule-Based Models
+  caret,              # Classification and Regression Training
+  e1071,              # Misc Functions of the Department of Statistics (e1071), TU Wien
+  keras,              # R Interface to 'Keras'
+  kernlab,            # Kernel-Based Machine Learning Lab
+  lattice,            # Trellis Graphics for R
+  MASS,               # Support Functions and Datasets for Venables and Ripley's MASS
+  mlbench,            # Machine Learning Benchmark Problems
+  nnet,               # Feedforward Neural Networks and Multinomial Log-Linear Models
+  palmerpenguins,     # Palmer Archipelago (Antarctica) Penguin Data
+  party,              # A Laboratory for Recursive Partytioning
+  partykit,           # A Toolkit for Recursive Partytioning
+  randomForest,       # Breiman and Cutler's Random Forests for Classification and Regression
+  rpart,              # Recursive partitioning models
+  RWeka,              # R/Weka Interface
+  scales,             # Scale Functions for Visualization
+  tidymodels,         # Tidy machine learning framework
+  tidyverse,          # Tidy data wrangling and visualization
+  xgboost             # Extreme Gradient Boosting
+)
+```
+
+Show fewer digits
+
+```{r}
+options(digits=3)
+```
+
+## **Introduction**
+
+Many different [classification algorithms](https://en.wikipedia.org/wiki/Supervised_learning) have been proposed in the literature. In this chapter, we will apply some of the more popular methods.
+
+## **Training and Test Data**
+
+I will use the Bird dataset which I created in part 1 of this assignment. The Bird dataset contains 17 (mostly logical) variables on 250 different observations for 5 bird species as a data frame with 16 columns with information about the presence of environmental factors when the observation occured.
+
+```{r}
+bird_data <- read.csv("data/bird.csv")
+bird_data %>% glimpse()
+```
+
+```{r}
+# need to make the species a factor
+bird_data <- bird_data %>% 
+    mutate(across(where(is.character), factor))
+bird_data %>% glimpse()
+```
+
+Test data is not used in the model building process and needs to be set aside purely for testing the model after it is completely built. Here I use 80% for training.
+
+```{r}
+set.seed(123)  # for reproducibility
+inTrain <- createDataPartition(y = bird_data$species, p = .8)[[1]]
+bird_train <- dplyr::slice(bird_data, inTrain)
+bird_test <- dplyr::slice(bird_data, -inTrain)
+```
+
+## **Fitting Different Classification Models to the Training Data**
+
+Create a fixed sampling scheme (10-folds) so we can compare the fitted models later.
+
+```{r}
+train_index <- createFolds(bird_test$species, k=10)
+```
+
+I am going to look at accuracy below as a primarily check of overall performance of these decision trees. While accuracy is not always a good indicator for performance, as it can be misleading, I believe it is useful in determine which models/trees might be best.
+
+### **Conditional Inference Tree (Decision Tree)**
+
+```{r}
+ctreeFit <- bird_train |> train(species ~ .,
+  method = "ctree",
+  data = _,
+    tuneLength = 5,
+    trControl = trainControl(method = "cv", indexOut = train_index))
+ctreeFit
+```
+
+These accuracy scores that range from 38 to 46% are not awesome. I expect that the plot below will show that these attributes are not good indicators of species.
+
+```{r}
+plot(ctreeFit$finalModel)
+```
+
+Unlike the example, I only have the top node with a significant p value.
+
+### **C 4.5 Decision Tree**
+
+```{r}
+C45Fit <- bird_train |> train(species ~ .,
+  method = "J48",
+  data = _,
+    tuneLength = 5,
+    trControl = trainControl(method = "cv", indexOut = train_index))
+C45Fit
+```
+
+Based on accuracy the C45 may produce better results than the conditional inference tree, lets look closer.
+
+```{r}
+C45Fit$finalModel
+```
+
+That is a lot of leaves and took a decent amount of time to run.
+
+### **K-Nearest Neighbors**
+
+**Note:** kNN uses Euclidean distance, so data should be standardized (scaled) first. Here housing denisty are measured between 0 and 4 while all other variables are between 0 and 1. Scaling can be directly performed as preprocessing in `train` using the parameter `preProcess = "scale"`.
+
+```{r}
+knnFit <- bird_train |> train(species ~ .,
+  method = "knn",
+  data = _,
+  preProcess = "scale",
+    tuneLength = 5,
+  tuneGrid=data.frame(k = 1:10),
+    trControl = trainControl(method = "cv", indexOut = train_index))
+knnFit
+```
+
+```{r}
+knnFit$finalModel
+```
+
+This appears to be our best performer so far, with accuracy of almost 65% especially as we have a k value of 3 rather than 1like the example.
+
+### **PART (Rule-based classifier)**
+
+```{r}
+rulesFit <- bird_train |> train(species ~ .,
+  method = "PART",
+  data = _,
+  tuneLength = 5,
+  trControl = trainControl(method = "cv", indexOut = train_index))
+rulesFit
+```
+
+```{r}
+rulesFit$finalModel
+```
+
+That is a lot of rules and it took awhile to run. The accuracy scores are not as high as k nearest but better than the others.
+
+### **Linear Support Vector Machines**
+
+```{r}
+svmFit <- bird_train |> train(species ~.,
+  method = "svmLinear",
+  data = _,
+    tuneLength = 5,
+    trControl = trainControl(method = "cv", indexOut = train_index))
+svmFit
+```
+
+```{r}
+svmFit$finalModel
+```
+
+This is a fairly low accuracy and high training error. This may be the worst performer yet.
+
+### **Random Forest**
+
+```{r}
+randomForestFit <- bird_train |> train(species ~ .,
+  method = "rf",
+  data = _,
+    tuneLength = 5,
+    trControl = trainControl(method = "cv", indexOut = train_index))
+randomForestFit
+```
+
+```{r}
+randomForestFit$finalModel
+```
+
+The mtry is 16 and the OOB are all over 60% so I would guess that this is overfiting the data
+
+### **Gradient Boosted Decision Trees (xgboost)**
+
+```{r}
+xgboostFit <- bird_train |> train(species ~ .,
+  method = "xgbTree",
+  data = _,
+  tuneLength = 5,
+  trControl = trainControl(method = "cv", indexOut = train_index),
+  tuneGrid = expand.grid(
+    nrounds = 20,
+    max_depth = 3,
+    colsample_bytree = .6,
+    eta = 0.1,
+    gamma=0,
+    min_child_weight = 1,
+    subsample = .5
+  ))
+xgboostFit
+```
+
+```{r}
+xgboostFit$finalModel
+```
+
+### **Artificial Neural Network**
+
+```{r}
+nnetFit <- bird_train |> train(species ~ .,
+  method = "nnet",
+  data = _,
+    tuneLength = 5,
+    trControl = trainControl(method = "cv", indexOut = train_index),
+  trace = FALSE)
+nnetFit
+```
+
+```{r}
+nnetFit$finalModel
+```
+
+These results are more promising that others. Lets Compare the Models and add some commentary.
+
+## **Comparing Models**
+
+Collect the performance metrics from the models trained on the same data.
+
+```{r}
+resamps <- resamples(list(
+  ctree = ctreeFit,
+  C45 = C45Fit,
+  SVM = svmFit,
+  KNN = knnFit,
+  rules = rulesFit,
+  randomForest = randomForestFit,
+  xgboost = xgboostFit,
+  NeuralNet = nnetFit
+    ))
+resamps
+```
+
+Calculate summary statistics
+
+```{r}
+summary(resamps)
+```
+
+```{r}
+library(lattice)
+bwplot(resamps, layout = c(3, 1))
+```
+
+So it does appear that the random forest was one of the best performers but I think this is a case of overfiting.
+
+Perform inference about differences between models. For each metric, all pair-wise differences are computed and tested to assess if the difference is equal to zero. By default Bonferroni correction for multiple comparison is used. Differences are shown in the upper triangle and p-values are in the lower triangle.
+
+```{r}
+difs <- diff(resamps)
+difs
+```
+
+```{r}
+summary(difs)
+```
+
+It is hard to tell which one of these models performed the best or the worst as they were all pretty bad. All of the p-values indicate that we cannot reject the null hypothesis of the difference = 0 and the differences in the rows are mostly negative.
+
+## **Applying the Chosen Model to the Test Data**
+
+Most models do similarly well on the data. We choose here the random forest model.
+
+```{r}
+pr <- predict(randomForestFit, bird_test)
+pr
+```
+
+Calculate the confusion matrix for the held-out test data.
+
+```{r}
+confusionMatrix(pr, reference = bird_test$species)
+```
+
+Not great with an accuracy of 35% and the p-value is not significant. The negative pred was high but the pos pred value was pretty low.
+
+Can we predict the presence or absence of a specific bird species based on habitat type, surrounding environment (like presence of squirrels, cats, humans, etc.), and feeding habits in a given location?
+
+I would that the answer is no. However, I limited the data I was considering and the species. I may have gotten different results if I had chosen other bird species or logical(true /false) variable. But for these 5 species and these 16 variable about the habitat and surrounding area the answer is no.
+
+## **Comparing Decision Boundaries of Popular Classification Techniques**
+
+Classifiers create decision boundaries to discriminate between classes. Different classifiers are able to create different shapes of decision boundaries (e.g., some are strictly linear) and thus some classifiers may perform better for certain datasets. This page visualizes the decision boundaries found by several popular classification methods.
+
+The following plot adds the decision boundary (black lines) and classification confidence (color intensity) by evaluating the classifier at evenly spaced grid points. Note that low resolution (to make evaluation faster) will make the decision boundary look like it has small steps even if it is a (straight) line.
+
+```{r}
+library(scales)
+library(tidyverse)
+library(ggplot2)
+library(caret)
+
+decisionplot <- function(model, data, class_var, 
+  predict_type = c("class", "prob"), resolution = 3 * 72) {
+  # resolution is set to 72 dpi if the image is rendered  3 inches wide. 
+  
+  y <- data |> pull(class_var)
+  x <- data |> dplyr::select(-all_of(class_var))
+  
+  # resubstitution accuracy
+  prediction <- predict(model, x, type = predict_type[1])
+  # LDA returns a list
+  if(is.list(prediction)) prediction <- prediction$class
+  prediction <- factor(prediction, levels = levels(y))
+  
+  cm <- confusionMatrix(data = prediction, 
+                        reference = y)
+  acc <- cm$overall["Accuracy"]
+  
+  # evaluate model on a grid
+  r <- sapply(x[, 1:2], range, na.rm = TRUE)
+  xs <- seq(r[1,1], r[2,1], length.out = resolution)
+  ys <- seq(r[1,2], r[2,2], length.out = resolution)
+  g <- cbind(rep(xs, each = resolution), rep(ys, time = resolution))
+  colnames(g) <- colnames(r)
+  g <- as_tibble(g)
+  
+  ### guess how to get class labels from predict
+  ### (unfortunately not very consistent between models)
+  cl <- predict(model, g, type = predict_type[1])
+  
+  # LDA returns a list
+  prob <- NULL
+  if(is.list(cl)) { 
+    prob <- cl$posterior
+    cl <- cl$class
+  } else
+    if(!is.na(predict_type[2]))
+      try(prob <- predict(model, g, type = predict_type[2]))
+  
+  # we visualize the difference in probability/score between the 
+  # winning class and the second best class.
+  # don't use probability if predict for the classifier does not support it.
+  max_prob <- 1
+  if(!is.null(prob))
+    try({
+      max_prob <- t(apply(prob, MARGIN = 1, sort, decreasing = TRUE))
+      max_prob <- max_prob[,1] - max_prob[,2]
+    }, silent = TRUE) 
+  
+  cl <- factor(cl, levels = levels(y))
+  
+  g <- g |> add_column(prediction = cl, probability = max_prob)
+  
+  ggplot(g, mapping = aes(
+    x = .data[[colnames(g)[1]]], y = .data[[colnames(g)[2]]])) +
+    geom_raster(mapping = aes(fill = prediction, alpha = probability)) +
+    geom_contour(mapping = aes(z = as.numeric(prediction)), 
+      bins = length(levels(cl)), linewidth = .5, color = "black") +
+    geom_point(data = data, mapping =  aes(
+      x = .data[[colnames(data)[1]]], 
+      y = .data[[colnames(data)[2]]],
+      shape = .data[[class_var]]), alpha = .7) + 
+    scale_alpha_continuous(range = c(0,1), limits = c(0,1), guide = "none") +  
+    labs(subtitle = paste("Training accuracy:", round(acc, 2))) +
+     theme_minimal(base_size = 14)
+}
+```
+
+### **Not Penguins Dataset but I will use Birds**
+
+Instead of the penguins dataset I will use the bird species by longitude and latitude as the two dimensions
+
+```{r}
+# read in data
+birds_2dim <- read.csv("data/PFW_2021_public.csv")
+```
+
+```{r}
+library(dplyr)
+# reduce it down to species, day, month
+birds_2dim <- dplyr::select(birds_2dim, c(latitude, longitude, species_code))
+```
+
+```{r}
+# this is a lot of observtions I am going to limit it so that it will run a little faster on my machine
+birds_2dim <- birds_2dim[1:1000,]
+# now lets only use 3 species like the peguin set
+birds <- birds_2dim %>% filter(species_code == "daejun"|species_code == "bkcchi"| species_code == "blujay")
+```
+
+```{r}
+# make species a factor
+birds <- birds %>% 
+    mutate(across(where(is.character), factor))
+```
+
+```{r}
+set.seed(1000)
+
+birds <- as_tibble(birds) |>
+  drop_na()
+
+### Three classes 
+### (note: MASS also has a select function which hides dplyr's select)
+x <- birds |> dplyr::select(latitude, longitude, species_code)
+x
+```
+
+```{r}
+ggplot(x, aes(x = latitude, y = longitude, fill = species_code)) +  
+  stat_density_2d(geom = "polygon", aes(alpha = after_stat(level))) +
+  geom_jitter() +
+  theme_minimal(base_size = 14) +
+  labs(x = "Latitude",
+       y = "Longitude",
+       fill = "Species",
+       alpha = "Density")
+```
+
+I am really feeling like I have chosen the wrong data set.
+
+#### K-Nearest Neighbors Classifier
+
+```{r}
+model <- x |> caret::knn3(species_code ~ ., data = _, k = 1)
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "kNN (1 neighbor)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+I literally just laughed out loud at this.
+
+```{r}
+model <- x |> caret::knn3(species_code ~ ., data = _, k = 3)
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "kNN (3 neighbor)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+model <- x |> caret::knn3(species_code ~ ., data = _, k = 9)
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "kNN (9 neighbor)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+I do not think increasing k helped in this situation.
+
+#### Naive Bayes Classifier
+
+```{r}
+model <- x |> e1071::naiveBayes(species_code ~ ., data = _)
+decisionplot(model, x, class_var = "species_code", 
+             predict_type = c("class", "raw")) + 
+  labs(title = "Naive Bayes",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction") 
+```
+
+I think that looks better than the previous experiment, even though the accuracy is lower.
+
+#### Linear Discriminant Analysis
+
+```{r}
+model <- x |> MASS::lda(species_code ~ ., data = _)
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "LDA",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+
+```
+
+#### Multinomial Logistic Regression (implemented in nnet)
+
+Multinomial logistic regression is an extension of logistic regression to problems with more than two classes.
+
+```{r}
+model <- x |> nnet::multinom(species_code ~., data = _)
+```
+
+```{r}
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "Multinomial Logistic Regression",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+#### Decision Trees
+
+```{r}
+model <- x |> rpart::rpart(species_code ~ ., data = _)
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "CART",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+model <- x |> rpart::rpart(species_code ~ ., data = _,
+  control = rpart.control(cp = 0.001, minsplit = 1))
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "CART (overfitting)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+Some of this really looks like artwork.
+
+```{r}
+model <- x |> C50::C5.0(species_code ~ ., data = _)
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "C5.0",
+       x = "Latitude",
+       y = "Lontitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+model <- x |> randomForest::randomForest(species_code ~ ., data = _)
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "Random Forest",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+That is definitely overfitted
+
+#### SVM
+
+```{r}
+model <- x |> e1071::svm(species_code ~ ., data = _, kernel = "linear")
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "SVM (linear kernel)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+Interesting that this one just decided to predict everything as one species and got an accuracy of 40%.
+
+```{r}
+model <- x |> e1071::svm(species_code ~ ., data = _, kernel = "radial")
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "SVM (radial kernel)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+model <- x |> e1071::svm(species_code ~ ., data = _, kernel = "polynomial")
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "SVM (polynomial kernel)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+model <- x |> e1071::svm(species_code ~ ., data = _, kernel = "sigmoid")
+decisionplot(model, x, class_var = "species_code") + 
+  labs(title = "SVM (sigmoid kernel)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+#### Single Layer Feed-forward Neural Networks
+
+```{r}
+model <-x |> nnet::nnet(species_code ~ ., data = _, size = 1, trace = FALSE)
+decisionplot(model, x, class_var  = "species_code", 
+  predict_type = c("class", "raw")) + 
+  labs(title = "NN (1 neuron)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+
+```
+
+```{r}
+model <-x |> nnet::nnet(species_code ~ ., data = _, size = 2, trace = FALSE)
+decisionplot(model, x, class_var  = "species_code", 
+  predict_type = c("class", "raw")) + 
+  labs(title = "NN (2 neurons)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+model <-x |> nnet::nnet(species_code ~ ., data = _, size = 4, trace = FALSE)
+decisionplot(model, x, class_var  = "species_code", 
+  predict_type = c("class", "raw")) + 
+  labs(title = "NN (4 neurons)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+model <-x |> nnet::nnet(species_code ~ ., data = _, size = 10, trace = FALSE)
+decisionplot(model, x, class_var  = "species_code", 
+  predict_type = c("class", "raw")) + 
+  labs(title = "NN (10 neurons)",
+       x = "Latitude",
+       y = "Longitude",
+       shape = "Species",
+       fill = "Prediction")
+```
+
+```{r}
+ggplot(x, aes(x = latitude, y = longitude, color = species_code)) + 
+  geom_point() +
+  theme_minimal(base_size = 14)
+```
+
+This data of the three species of birds has no clusters or groupings. The models show that the accuracy on models that are not overfited are below 50%.
